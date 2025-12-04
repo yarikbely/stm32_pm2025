@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
 
-
 set(CMAKE_C_COMPILER_WORKS 1)
 set(CMAKE_CXX_COMPILER_WORKS 1)
+add_definitions(-DSTM32F1)
 
 project(stm32_template)
 
@@ -11,6 +11,7 @@ set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS)
 
 set(TARGET_NAME ${PROJECT_NAME})
 
+set(OPENCM3_PATH ${PROJECT_SOURCE_DIR}/libopencm3)
 set(ARM_TOOLCHAIN_PATH $ENV{ARM_TOOLCHAIN_PATH})
 set(CMAKE_C_COMPILER ${ARM_TOOLCHAIN_PATH}arm-none-eabi-gcc)
 set(OBJCOPY ${ARM_TOOLCHAIN_PATH}arm-none-eabi-objcopy)
@@ -27,24 +28,30 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-move-loop-invariants -fsigned-char -ffr
 
 set(LINKER_FLAGS "-nostdlib -nostartfiles")
 set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -Map -Xlinker ${TARGET_NAME}.map ")
-# Choose ld file for your MCU carefully
 set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/stm32f103c8.ld")
-# set(LINKER_FLAGS "${LINKER_FLAGS} -mcpu=cortex-m3 -mthumb -nostartfiles -g ") 
+# set(LINKER_FLAGS "${LINKER_FLAGS} -mcpu=cortex-m3 -mthumb -nostartfiles -g ") #Not necessary
 set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,--gc-sections ")
-
 set(CMAKE_C_LINK_FLAGS ${LINKER_FLAGS})
 
 message("DIRECTORY ${EXECUTABLE_OUTPUT_PATH}")
 
-
 add_definitions(-DSTM32F103C8)
 add_definitions(-DSTM32F10X_MD)
-
 # add_definitions(-DUSE_STDPERIPH_DRIVER)
 
 include_directories(cmsis)
 include_directories(stm32)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+include(ExternalProject)
+ExternalProject_Add(opencm3_build SOURCE_DIR ${OPENCM3_PATH}
+   CONFIGURE_COMMAND ""
+   BUILD_COMMAND
+   PREFIX=${ARM_TOOLCHAIN_PATH}arm-none-eabi-
+   TARGETS=stm32/f1
+   make -C <SOURCE_DIR>
+   BUILD_IN_SOURCE TRUE
+   INSTALL_COMMAND "")
 
 set(SOURCE_FILES
     stm32/startup/startup_stm32f10x_md.c
@@ -58,6 +65,16 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/.gdbinit DESTINATION ${EXECUTABLE_OUTPUT_P
 
 add_executable(${TARGET_NAME} ${SOURCE_FILES})
 
+add_dependencies(${TARGET_NAME} opencm3)
+
+set(OPENCM3_INC_DIRS "${OPENCM3_PATH}/include")
+
+add_library(opencm3 STATIC IMPORTED)
+
+add_dependencies(opencm3 opencm3_build)
+
+set_target_properties(opencm3 PROPERTIES IMPORTED_LOCATION ${OPENCM3_PATH}/lib/libopencm3_stm32f1.a INTERFACE_INCLUDE_DIRECTORIES ${OPENCM3_INC_DIRS})
+target_link_libraries(${PROJECT_NAME} opencm3)
 
 set(BIN_TARGET "${EXECUTABLE_OUTPUT_PATH}/${TARGET_NAME}.bin")
 set(HEX_TARGET "${EXECUTABLE_OUTPUT_PATH}/${TARGET_NAME}.hex")
